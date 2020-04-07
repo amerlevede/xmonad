@@ -1,0 +1,6 @@
+resolver: lts-11.4
+packages:
+- ../xmonad-git
+- ../xmonad-contrib-git
+- ../xmonad-my
+- ./

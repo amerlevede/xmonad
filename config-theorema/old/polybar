@@ -1,0 +1,61 @@
+[bar/top]
+
+font-0 = "fixed:pixelsize=11;3"
+
+width = 100%
+height = 34
+padding-left = 6
+padding-right =6
+
+bottom = false
+
+separator = "     "
+
+background = #00000000
+foreground = #cc000000
+
+tray-position = true
+
+modules-left = clock battery
+
+[module/xworkspaces]
+type = internal/xworkspaces
+label-active-foregroung = #ff0000
+
+[module/clock]
+type = internal/date
+interval = 2
+date = %H:%M  %%{F#99000000}%B  %d%%{F-}
+
+[module/battery]
+type = internal/battery
+battery = BAT1
+dapter = ADP1
+
+time-format = %H:%M
+
+label-discharging = %percentage%% %{F#99000000}%time% left%{F-}
+label-charging = %percentage%% %{F#99000000}charging%{F-}
+
+[module/wifi]
+type = internal/network
+interface = wlx2016d8f64f53
+
+format-connected = <ramp-signal> <label-connected>
+label-connected = %{F#99000000}%essid%%{F-}
+ramp-signal-0 = 0
+ramp-signal-1 = 1
+ramp-signal-2 = 2
+ramp-signal-3 = 3
+ramp-signal-4 = 4
+
+label-disconnected = %{F#99000000}No wifi%{F-}
+
+[module/volume]
+type = internal/pulseaudio
+
+format-volume = %{A1:pavucontrol:}<label-volume>%{F#99000000} volume%{F-}%{A}
+format-muted = %{A1:pavucontrol:}volume muted%{A}
+
+
+

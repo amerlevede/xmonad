@@ -1,0 +1,16 @@
+name:               config
+cabal-version:      >= 1.8
+version:            1.0
+build-type:         Simple
+
+executable xmonad
+    main-is:            xmonad.hs
+    build-depends:      base,
+                        mtl,
+                        containers,
+                        xmonad,
+                        xmonad-contrib,
+                        xmonad-my,
+                        process,
+                        unix
+    extensions:         NoMonomorphismRestriction

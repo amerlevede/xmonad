@@ -1,0 +1,7 @@
+[Desktop Entry]
+Encoding=UTF-8
+Type=XSession
+Exec=env KDEWM=/home/adriaan/.local/bin/xmonad /usr/bin/startkde
+TryExec=/home/adriaan/.local/bin/xmonad
+Name=KDE Xmonad
+Comment=KDE with Xmonad as window manager

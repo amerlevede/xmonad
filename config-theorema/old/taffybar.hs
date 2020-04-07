@@ -1,0 +1,181 @@
+
+import System.Taffybar
+import System.Taffybar.Systray
+import System.Taffybar.SimpleClock
+import System.Taffybar.TaffyPager
+
+main =
+    do let myClock = textClockNew Nothing "<span fgcolor='orange'>%a %b %_d %H:%M</span>" 1
+       let mySystray = systrayNew
+       let myTaskbar = taffyPagerNew defaultPagerConfig
+       defaultTaffybar defaultTaffybarConfig
+           { startWidgets = [ myTaskbar ]
+           , endWidgets   = [ myClock, mySystray ]}
+
+
+-- import System.Taffybar
+--
+-- import System.Taffybar.Systray
+-- import System.Taffybar.Pager
+-- import System.Taffybar.TaffyPager
+-- import System.Taffybar.SimpleClock
+-- import System.Taffybar.FreedesktopNotifications
+-- import System.Taffybar.Weather
+-- import System.Taffybar.MPRIS2
+-- import System.Taffybar.MPRIS
+-- import System.Taffybar.Battery
+-- import System.Taffybar.DiskIOMonitor
+-- import System.Taffybar.FSMonitor
+-- import System.Taffybar.NetMonitor
+--
+-- import System.Taffybar.Widgets.PollingBar
+-- import System.Taffybar.Widgets.PollingGraph
+--
+-- import System.Information.Memory
+-- import System.Information.CPU
+--
+-- import Graphics.UI.Gtk as Gtk
+--
+-- class Color' c where
+--   toHexString :: c -> String
+--
+-- class Rgba c where
+--   toRgba :: c -> (Double, Double, Double, Double) -- (0-1, 0-1, 0-1, 0-1) RGBA tuple
+--   toRgb :: c -> (Double, Double, Double)
+--   toRgb = rgbaToRgb . toRgba
+--
+-- rgbaToRgb (r, g, b, a) = (r, g, b)
+--
+-- data Solarized = Base03  | -- (dark)  Background
+--                  Base02  | -- (dark)  Background highlights
+--                  Base01  | -- (dark)  Comments / Secondary content | (light) Optional emphasized content
+--                  Base00  | -- (light) Body text / Default code / Primary content
+--                  Base0   | -- (dark)  Body text / Default code / Primary content
+--                  Base1   | -- (dark)  Optional emphasized content | (light) Comments / Secondary content
+--                  Base2   | -- (light) Background highlights
+--                  Base3   | -- (light) Background
+--                  Yellow  |
+--                  Orange  |
+--                  Red     |
+--                  Magenta | Violet  | Blue    | Cyan    |
+--                  Green
+--
+-- instance Color' Solarized where
+--   toHexString c = case c of
+--     Base03  -> "#002b36"
+--     Base02  -> "#073642"
+--     Base01  -> "#586e75"
+--     Base00  -> "#657b83"
+--     Base0   -> "#839496"
+--     Base1   -> "#93a1a1"
+--     Base2   -> "#eee8d5"
+--     Base3   -> "#fdf6e3"
+--     Yellow  -> "#b58900"
+--     Orange  -> "#cb4b16"
+--     Red     -> "#dc322f"
+--     Magenta -> "#d33682"
+--     Violet  -> "#6c71c4"
+--     Blue    -> "#268bd2"
+--     Cyan    -> "#2aa198"
+--     Green   -> "#719e07"
+--
+-- instance Rgba Solarized where
+--     toRgba c = rgbaToTaffyColor $ solarizedToRgba c
+--
+-- rgbaToTaffyColor :: (Double, Double, Double, Double) -> (Double, Double, Double, Double)
+-- rgbaToTaffyColor (r, g, b, a) = (r/255.0, g/255.0, b/255.0, a/255.0)
+--
+-- solarizedToRgba :: Solarized -> (Double, Double, Double, Double)
+-- solarizedToRgba c = case c of
+--       Base03  -> (0, 43, 54.0, 255)
+--       Base02  -> (7, 52, 66, 255)
+--       Base01  -> (88, 110, 117, 255)
+--       Base00  -> (101, 123, 131, 255)
+--       Base0   -> (131, 148, 150, 255)
+--       Base1   -> (147, 161, 161, 255)
+--       Base2   -> (238, 232, 213, 255)
+--       Base3   -> (253, 246, 227, 255)
+--       Yellow  -> (181, 137, 00, 255)
+--       Orange  -> (203, 75, 22, 255)
+--       Red     -> (220, 50, 47, 255)
+--       Magenta -> (221, 54, 130, 255)
+--       Violet  -> (108, 113, 196, 255)
+--       Blue    -> (38, 139, 210, 255)
+--       Cyan    -> (42, 161, 151, 255)
+--       Green   -> (113, 158, 7, 255)
+--
+-- class TaffyColor c where
+--         toTaffyColor :: c -> (Double, Double, Double, Double) -- (0-1, 0-1, 0-1, 0-1) RGBA tuple
+--
+-- pad = wrap " " " "
+--
+-- memCallback = do
+--   mi <- parseMeminfo
+--   return [(memoryTotal mi - memoryFree mi) / memoryTotal mi]
+--
+-- cpuCallback = do
+--   (userLoad, systemLoad, totalLoad) <- cpuLoad
+--   return [totalLoad, systemLoad]
+--
+-- makeTray = do
+--     tray <- systrayNew
+--     container <- Gtk.eventBoxNew
+--     Gtk.containerAdd container tray
+--     Gtk.widgetSetName container "Taffybar"
+--     Gtk.widgetSetName tray "Taffybar"
+--     return $ Gtk.toWidget container
+--
+-- main = do
+--   let memCfg = defaultGraphConfig { graphDataColors = [ toRgba Yellow ]
+--                                   , graphBackgroundColor = toRgb Base03
+--                                   , graphLabel = Just "mem"
+--                                   , graphDirection = RIGHT_TO_LEFT
+--                                   }
+--       cpuCfg = defaultGraphConfig { graphDataColors = [ toRgba Red
+--                                                       , toRgba Blue
+--                                                       ]
+--                                   , graphBackgroundColor = toRgb Base03
+--                                   , graphLabel = Just "cpu"
+--                                   , graphDirection = RIGHT_TO_LEFT
+--                                   }
+--       batteryCfg = defaultBatteryConfig { barBackgroundColor = const $ toRgb Base03
+--                                         , barColor = colorFn
+--                                         }
+--           where
+--               colorFn percentage
+--                 | percentage < 0.4 = toRgb Red
+--                 | percentage < 0.6 = toRgb Base0
+--                 | otherwise        = toRgb Green
+--
+--       diskCfg = defaultGraphConfig { graphDataColors = [ toRgba Cyan
+--                                                        , toRgba Magenta ]
+--                                    , graphBackgroundColor = toRgb Base03
+--                                    , graphLabel = Just "ssd"
+--                                    , graphDirection = RIGHT_TO_LEFT
+--                                    }
+--
+--
+--   let pager       = taffyPagerNew defaultPagerConfig { activeLayout = colorize (toHexString Violet) "" . escape
+--                                                      , activeWorkspace = colorize (toHexString Yellow) "" . wrap "[" "]" . escape
+--                                                      , visibleWorkspace = colorize (toHexString Cyan) "" . wrap "(" ")" . escape
+--                                                      , emptyWorkspace = colorize (toHexString Base01) "" . escape
+--                                                      , hiddenWorkspace = colorize (toHexString Magenta) "" . escape
+--                                                      , urgentWorkspace = colorize (toHexString Red) "" . escape
+--                                                      , widgetSep = colorize (toHexString Blue) "" " | "
+--                                                      , activeWindow = pad . escape . shorten 50
+--                                                      }
+--       note        = notifyAreaNew defaultNotificationConfig
+--
+--       mpris2      = mpris2New
+--       fs          = fsMonitorNew 30 ["/"]
+--       battery     = batteryBarNew batteryCfg 2
+--       cpu         = pollingGraphNew cpuCfg 0.5 cpuCallback
+--       mem         = pollingGraphNew memCfg 0.5 memCallback
+--       disk        = dioMonitorNew diskCfg 0.5 "sda"
+--       tray        = systrayNew
+--       wifi        = netMonitorNew 0.5 "wlp4s0"
+--       clock       = textClockNew Nothing  ("<span fgcolor='" ++ (toHexString Yellow) ++ "'>%a %b %_d %H:%M</span>") 1
+--
+--   defaultTaffybar defaultTaffybarConfig { startWidgets = [ pager, note ]
+--                                         , endWidgets = reverse [ mpris2, wifi, battery, disk, cpu, mem, fs, tray, clock ]
+--                                         }

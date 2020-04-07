@@ -1,0 +1,47 @@
+name:               xmonad-my
+cabal-version:      >= 1.8
+version:            1.0
+build-type:         Simple
+
+library
+    hs-source-dirs:     lib
+    exposed-modules:    Basic.ConfigModifier,
+                        Basic.KeyBindings,
+                        Basic.Background,
+                        Basic.Basic,
+                        Basic.Float,
+                        Basic.DoubleClick,
+                        Basic,
+                        Layout.Maximize,
+                        Layout.EmptyWindows,
+                        Layout.FocusIsMaster,
+                        Layout.ShrinkUnfocused,
+                        Layout.Tabbed,
+                        Layout.OptionalTitleBar,
+                        Layout.OptionalBorder,
+                        TabScreen,
+                        Desktop.Fullscreen,
+                        Desktop.Plasma,
+                        Memory.Input,
+                        Memory.Handle,
+                        Actions,
+                        Actions.Brightness,
+--                        Actions.OptionalBorder -- Need newer version of xmonad-contrib to compile
+                        Actions.Navigation,
+                        Actions.Rotation,
+                        Actions.TabScreen,
+                        Actions.Volume,
+                        Actions.XMonad,
+                        Actions.Maximize,
+                        Actions.Basic,
+                        Actions.Desktop.Plasma
+    build-depends:      base < 5 && >=3,
+                        xmonad,
+                        xmonad-contrib,
+                        containers,
+                        mtl,
+                        time,
+                        process,
+                        reflection
+    extensions:         NoMonomorphismRestriction
+                      , DoAndIfThenElse

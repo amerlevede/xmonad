@@ -1,0 +1,664 @@
+
+-- | Attempts at getting XMonad to "overlay" two workspaces.
+--   This is the same fuctionality as "TabScreen", but should have used the current workspace as a background.
+--   No implementation was successful.
+
+module Layout.Overlay
+    (
+    ) where
+
+-- activateOverlayWith :: LayoutClass ol Window => ol Window -> WorkspaceId -> ConfigModifier' ul (WithOverlay ol ul)
+-- activateOverlayWith olay oid conf = undefined
+--     -- conf { layoutHook = WithOverlay { overlay_wsid = oid, overlay_active = Nothing, overlay_under = Right (layoutHook conf) } }
+--
+-- activateOverlay = activateOverlayWith myOverlayLayout myOverlayId
+--
+-- myOverlayLayout = myLayout
+-- myOverlayId = "overlay"
+--
+--
+--
+-- action_overlay, action_forceOverlay, action_removeOverlay :: X ()
+-- action_overlay = sendMessage ToggleOverlay
+-- action_forceOverlay = sendMessage Overlay
+-- action_removeOverlay = sendMessage UnOverlay
+--
+-- myOverlayKeys :: [KeyBinding]
+-- myOverlayKeys =
+--     [ Mod xK_o      ==> action_focusOnWorkspace myOverlayId
+--     , ModShift xK_o ==> action_focusedWindowToWorkspace myOverlayId
+--     , Mod xK_p      ==> action_overlay
+--     ]
+--
+-- -- | Store overlay Windows and id in StateExtension, call them to current workspace when overlay is called.
+-- --   Update overlaylayout always with broadcastMessage.
+-- data WithOverlay ol ul a
+--     = WithOverlay
+--     { overlayout    :: ol a
+--     , underlayout   :: ul a
+--     , overlayActive :: Bool
+--     } deriving (Read,Show)
+--
+-- data OverlayMessage = Overlay | UnOverlay | ToggleOverlay | SetOverlay WorkspaceId
+--     deriving (Read,Show,Typeable)
+-- instance Message OverlayMessage
+--
+-- newtype OverlayWindows = OverlayWindows [Window]
+--     deriving (Read,Show,Typeable)
+-- instance ExtensionClass OverlayWindows where
+--     initialValue = OverlayWindows []
+
+-- instance (LayoutClass ol a, LayoutClass ul a) => LayoutClass (WithOverlay ol ul) a where
+--     runLayout ws rect
+--       = if overlayActive (W.layout ws)
+--         then do OverlayWindows owindows <- Ex.get
+--                 addWindows owindows
+--
+--         where addWindows = undefined
+
+
+
+-- data WithOverlay ol ul a
+--     = WithOverlay
+--     { overlay_wsid   :: WorkspaceId           -- ^ Id of overlay workspace
+--     , overlay_active :: Maybe WorkspaceId     -- ^ In the overlay, Just id of the underlying workspace.
+--     , overlay_under  :: Either (ol a) (ul a)  -- ^ Underlying workspace (should be Left ol for overlay workspace, and Right ul for others.)
+--     }
+--     deriving (Read, Show)
+--
+-- instance (LayoutClass ol Window, LayoutClass ul Window) => LayoutClass (WithOverlay ol ul) Window where
+--     runLayout ws rect
+--         -- | Behave just like underlying workspace in non-overlay workspaces
+--         | overlay_wsid (W.layout ws) /= W.tag ws
+--           = showUnderlying
+--         -- | Show just overlay when underlying workspace is Nothing
+--         | Nothing <- overlay_active (W.layout ws)
+--           = showUnderlying
+--         -- | Show both underlying and overlay if current workspace is overlay, and overlay_active is Just id.
+--         | Just uwsid <- overlay_active (W.layout ws)
+--           = do uwsm <- gets $ find ((== uwsid) . W.tag). W.workspaces . windowset
+--                case uwsm of
+--                    Nothing -> showUnderlying -- Should not be possible
+--                    Just uws -> do (uplan, ulay') <- runLayout uws rect
+--                                   updateLayout uwsid ulay'
+--                                   (oplan, olay') <- showUnderlying
+--                                   return (oplan ++ uplan, olay')
+--         where showUnderlying = case overlay_under (W.layout ws) of
+--                   Left l  -> do (plan,lm) <- runLayout ws{ W.layout = l } (shrink (0.1::Double) rect)
+--                                 return (plan, (\l' -> (W.layout ws){ overlay_under = Left l' } ) <$> lm )
+--                   Right l -> do (plan,lm) <- runLayout ws{ W.layout = l } rect
+--                                 return (plan, (\l' -> (W.layout ws){ overlay_under = Right l' } ) <$> lm )
+--               shrink d Rectangle{ rect_x=x, rect_y=y, rect_width=w, rect_height=h }
+--                   = Rectangle { rect_x=x+w#(1-d/2), rect_y=y+h#(1-d/2), rect_width=w#d, rect_height=h#d }
+--                     where a # b = round $ fromIntegral a * b
+--
+--     handleMessage lay msg
+--         | Just (SetOverlay uid) <- fromMessage msg
+--           = setOverlay uid
+--         | Just Overlay <- fromMessage msg
+--           = overlay
+--         | Just UnOverlay <- fromMessage msg
+--           = unoverlay
+--         | Just ToggleOverlay <- fromMessage msg
+--           = toggleOverlay
+--        | otherwise
+--           = delegate
+--         where oid = overlay_wsid lay
+--               currentWs = gets $ W.currentTag . windowset
+--               setOverlay uid =
+--                   do wsid <- currentWs
+--                      if wsid == oid
+--                      then return . Just $ lay{ overlay_active = Just uid }
+--                      else return Nothing
+--               overlay =
+--                   do wsid <- currentWs
+--                      if wsid == oid
+--                      then return Nothing
+--                      else gets (find ((== oid) . W.tag) . W.workspaces . windowset) >>= \ owsm ->
+--                           case owsm of
+--                               Nothing  -> return Nothing -- Should not happen
+--                               Just ows ->
+--                                do sendMessageWithNoRefresh (SetOverlay wsid) ows
+--                                   modify $ \ x -> x{ windowset = W.greedyView oid (windowset x) }
+--                                   rescreen
+--                                   return Nothing
+--               unoverlay
+--                 = case overlay_active lay of
+--                       Nothing -> do spawn "xmessage \"No underlying!\""; return Nothing
+--                       Just wsid ->
+--                     --    do modify $ \ x -> x{windowset = W.greedyView wsid (windowset x) }
+--                        do spawn $ "xmessage \"Underlying: " ++ show wsid ++ "\""
+--                           windows $ W.greedyView wsid
+--                           rescreen
+--                           return Nothing
+--               toggleOverlay
+--                 = do wsid <- currentWs
+--                      if wsid == oid
+--                      then unoverlay
+--                      else overlay
+--               delegate
+--                 = case overlay_under lay of
+--                       Left l  -> do lm <- handleMessage l msg
+--                                     return $ (\l' -> lay{ overlay_under = Left l' }) <$> lm
+--                       Right l -> do lm <- handleMessage l msg
+--                                     return $ (\l' -> lay{ overlay_under = Right l' }) <$> lm
+
+
+
+
+    -- runLayout ws rect
+    --     | overlaysid_wsid (W.layout ws) == W.tag ws
+    --     ,
+    --       =
+
+    -- handleMessage lay msg
+    --     | Just Overlay <- fromMessage msg
+    --       = layover
+    --     | Just UnOverlay <- fromMessage msg
+    --       = unlayover
+    --     | Just ToggleOverlay <- fromMessage msg
+    --       = case overlay_under lay of
+    --             Nothing -> layover
+    --             Just _  -> unlayover
+    --     | otherwise
+    --       = case overlay_layout lay of
+    --             Left ol -> do olmaybe <- handleMessage ol msg
+    --                           return $ (\ ol' -> lay { overlay_layout = Left ol' }) <$> olmaybe
+    --             Right ul -> do ulmaybe <- handleMessage ul msg
+    --                            return $ (\ ul' -> lay { overlay_layout = Right ul' }) <$> ulmaybe
+    --     where layover =
+    --               do let oid = overlay_wsid lay
+    --                  uid <- gets $ W.tag . W.workspace . W.current . windowset
+    --                  ol <- gets $ fmap W.layout . find ((==oid).W.tag) . W.workspaces . windowset
+    --                  updateLayout oid . Just $ ol { overlay_active = Just uid }
+
+
+
+
+                           --     do
+                           --     case fromMessage msg of
+                           --         Just Overlay -> layover
+                           --         Just UnOverlay -> unlayover
+                           --         Just ToggleOverlay | ostate -> unlayover
+                           --                            | otherwise -> layover
+                           --         Nothing -> return Nothing
+                           --     where layover = return . Just $ WithOverlay overlayid True layout
+                           --           unlayover = return . Just $ WithOverlay overlayid False layout
+
+-- data WithOverlay l a = WithOverlay WorkspaceId (Maybe WorkspaceId) (l a)
+--     deriving (Read, Show)
+--
+-- instance (Read (l Window), LayoutClass l Window) => LayoutModifier (WithOverlay l) Window where
+--     modifyLayoutWithUpdate o@(WithOverlay oid ostate ol) workspace rect
+--         | Nothing <- ostate, oid == W.tag workspace
+--           = showOverlay []
+--         | Nothing <- ostate
+--           = showWorkspace
+--         | Just underwsid <- ostate, oid == W.tag workspace
+--           = do underwsMaybe <- getWs underwsid
+--                case underwsMaybe of
+--                    Just underws ->
+--                        do (uplan, _) <- runLayout underws rect
+--                           showOverlay uplan
+--                    Nothing -> do (plan,mol) <- showOverlay []
+--                                  let WithOverlay oid' _ ol' = fromMaybe o mol
+--                                  return (plan, Just $ WithOverlay oid' Nothing ol')
+--         | Just _ <- ostate
+--           = do action_focusOnWorkspace oid
+--                return (([],Nothing),Nothing)
+--         where getWs wsid = gets $ find ((==wsid) . W.tag) . W.workspaces . windowset
+--               showWorkspace =
+--                   do underlying <- runLayout workspace rect
+--                      return (underlying, Nothing)
+--               showOverlay under =
+--                   do (oplan,mol) <- runLayout workspace{ W.layout = ol } rect
+--                      return ((under++oplan, Nothing), WithOverlay oid ostate <$> mol)
+--
+--     handleMess (WithOverlay oid ostate ol) msg =
+--         do overlayActive <- gets $ (==oid) . W.tag . W.workspace . W.current . windowset
+--            if overlayActive
+--            then handleMessage msg ol
+
+    -- handleMess (WithOverlay overlayid ostate layout) msg =
+    --     do
+    --     case fromMessage msg of
+    --         Just Overlay -> layover
+    --         Just UnOverlay -> unlayover
+    --         Just ToggleOverlay | ostate -> unlayover
+    --                            | otherwise -> layover
+    --         Nothing -> return Nothing
+    --     where layover = return . Just $ WithOverlay overlayid True layout
+    --           unlayover = return . Just $ WithOverlay overlayid False layout
+
+        -- | False <- ostate
+        --   = do (plan,mol) <- runLayout workspace rect
+        --        return ((plan,mol),Nothing
+        -- | True <- ostate
+        --   = do (uplan,_) <- runLayout workspace rect
+        --        oworkspacemaybe <- gets $ find ((==oid) . W.tag) . W.workspaces . windowset
+        --        case oworkspacemaybe of
+        --            Nothing -> return ((uplan,Nothing), Just $ WithOverlay oid False ol)
+        --            Just oworkspace ->
+        --                do (oplan,mol) <- runLayout oworkspace { W.layout = ol } rect
+        --                   return ((uplan++oplan, Nothing), (\ ol' -> WithOverlay oid True ol') <$> mol)
+
+
+
+        -- do underlying <- runLayout workspace rect
+        --    return (underlying, Just (WithOverlay oid Nothing ol))
+    -- modifyLayoutWithUpdate (WithOverlay oid (Just ws) ol) workspace rect
+    --     | oid == W.tag workspace
+    --       = do (plan,ol') <- runLayout workspace { W.layout = ol } rect
+    --            return ((plan, Nothing), WithOverlay oid Nothing ol')
+    --     | otherwise
+    --       = do undefined
+
+
+--    modifyLayoutWithUpdate (WithOverlay overlayid layout overlaystate) workspace rect =
+--        case overlaystate of
+--            Hidden           -> ignore
+--            StandingAlone prev -> showWithLayout
+--            LayingOver under ->
+--                do underws <- gets $ find ((==under).W.tag) . W.workspaces . windowset
+--                   case underws of
+--                       Nothing -> showWithLayout
+--                       Just ws -> layover ws
+--            where ignore =
+--                      do underlying <- runLayout workspace rect
+--                         return (underlying, Nothing)
+--                  showWithLayout =
+--                      do (plan, layout') <- runLayout workspace { W.layout = layout } rect
+--                         case layout' of Nothing -> return ((plan, Nothing), Nothing)
+--                                         Just l' -> return ((plan, Nothing), Just $
+--                                             WithOverlay overlayid l' overlaystate)
+--                  layover under =
+--                      do (underplan, _) <- runLayout under rect
+--                         ((overplan, _), overlay') <- showWithLayout
+--                         return ((underplan ++ overplan, Nothing), overlay')
+
+    -- handleMess (WithOverlay overlayid layout overlaystate) msg =
+    --     case fromMessage msg of
+    --         Just Overlay -> layover
+    --         Just UnOverlay -> case overlaystate of
+    --             Hidden             -> donothing
+    --             StandingAlone prev -> unlayover prev
+    --             LayingOver under   -> unlayover under
+    --         Just ToggleOverlay -> case overlaystate of
+    --             Hidden             -> layover
+    --             StandingAlone prev -> unlayover prev
+    --             LayingOver under   -> unlayover under
+    --         Just OnlyOverlay -> onlyover
+    --         Nothing -> donothing
+    --     where donothing =
+    --               return Nothing
+    --           onlyover =
+    --               do prev <- gets $ W.currentTag . windowset
+    --                  return . Just $ WithOverlay overlayid layout (StandingAlone prev)
+    --           layover =
+    --               do under <- gets $ W.currentTag . windowset
+    --                  return . Just $ WithOverlay overlayid layout (LayingOver under)
+    --           unlayover wsid =
+    --               do windows $ W.greedyView wsid
+    --                  return . Just $ WithOverlay overlayid layout (Hidden)
+
+
+
+
+
+--
+-- -- TODO:
+-- -- * Notifications
+-- -- * Battery, time (use dzen)
+-- -- * volume and brightness and flight mode
+-- -- * Bluetooth (use blueberry)
+-- -- * Lock screen
+-- -- * Make window full-screen with mod-f
+-- -- * Replace Full layout with ribbon
+-- -- * Float resize
+-- -- * Fix dock type so that it does not matter if fields were added before or after dock activation
+-- -- * Dock-themed volume change pop-up
+--
+-- -- * Settings
+-- finalConfig = def
+--     & setModMask
+--     & setTerminal
+--     & setLayout
+--     & fixPlasma
+-- --    & setBackground
+-- --    & setIgnored
+--     & setKeys
+--     & fixFullscreen
+--     & fixTransparency
+-- --    & fixRotation
+-- --    & fixTouchGestures
+-- --    & activateNotifications
+--     & activateCapsAsSuper
+--     & activatePopDock myPopDock
+--     & activateEasyPrompt
+--
+-- myPopDock = popDock (modMask finalConfig, xK_p)
+--     & addField fieldDate
+--     & addField fieldVolume
+-- --    & addField fieldBattery
+--     & activatePopDockTaskBar
+--     & activatePopDockTrayBar
+--     & activatePopDockShellPrompt
+--
+--
+-- myFloaters = [ "blueberry.py", "okular", "gwenview" ]
+--
+-- myIgnore   = [ "xfce4-notifyd", "trayer" ]
+--
+-- myStartups = [ "./pia.sh" ]
+--
+-- -- myTerminal = "gnome-terminal --hide-menubar"
+-- myTerminal = "konsole --hide-menubar"
+--
+-- myKeys conf = withDef . M.fromList $
+--     [ modif xK_Return    ==> spawn (terminal conf)         -- Spawn terminal
+--     , modif xK_q         ==> kill                          -- Kill focused window
+--
+--     , modif xK_Tab       ==> windows W.focusDown           -- Focus on next window
+--     , modif xK_backslash ==> windows W.focusUp             -- Focus on previous window
+--     , shift xK_Tab       ==> windows W.swapDown            -- Swap focused and next windows
+--     , shift xK_backslash ==> windows W.swapUp              -- Swap focused and previous windows
+--
+--     , modif xK_equal     ==> sendMessage Expand            -- Increase size of master area
+--     , modif xK_minus     ==> sendMessage Shrink            -- Decrease size of master area
+--     , shift xK_equal     ==> sendMessage (IncMasterN 1)    -- Increase number of windows in master area
+--     , shift xK_minus     ==> sendMessage (IncMasterN (-1)) -- Decrease number of windows in master area
+--
+--     , modif xK_space     ==> sendMessage NextLayout        -- Rotate through the available layout algorithms
+--     , shift xK_space     ==> execLayoutReset conf          -- Reset the layouts on the current workspace
+--
+--     , modif xK_r         ==> execRestartXmonad             -- Restart xmonad
+--     , shift xK_r         ==> execExitXmonad                -- Shut down xmonad (return to login screen)
+--
+--     , modif xK_f         ==> execToggleFloat               -- Put this window in full screen, or sink it into the grid
+--
+--     ] ++                                                   -- Move view between workspaces
+--     [ modif key          ==> windows (W.greedyView workspace)
+--     | (workspace, key) <- zip (X.workspaces conf) [xK_1 .. xK_9]
+--     ] ++                                                   -- Move window between workspaces
+--     [ shift key          ==> windows (W.shift workspace)
+--     | (workspace, key) <- zip (X.workspaces conf) [xK_1 .. xK_0]
+--     ]
+--     ++
+--     [ modif xK_F1        ==> execVolumeToggle              -- Toggle volume
+--     , modif xK_Up        ==> execVolumeUp 5                -- Increase volume
+--     , modif xK_F3        ==> execVolumeUp 5
+--     , shift xK_Up        ==> execVolumeUp 1                -- Increase volume by a little bit
+--     , shift xK_F3        ==> execVolumeUp 1
+--     , modif xK_Down      ==> execVolumeDown 10             -- Decrease volume
+--     , modif xK_F2        ==> execVolumeDown 10
+--     , just  0x1008ff13   ==> execVolumeUp 5                -- Raise and lower volume buttons
+--     , just  0x1008ff11   ==> execVolumeDown 5
+--     , shift xK_Down      ==> execVolumeDown 2              -- Decrease volume by a little bit
+--     , shift xK_F2        ==> execVolumeDown 2
+--     , modif xK_Right     ==> execBrightnessUp 10           -- Increase brightness
+--     , modif xK_F12       ==> execBrightnessUp 10
+--     , shift xK_Right     ==> execBrightnessUp 1            -- Increase brightness by a little bit
+--     , shift xK_F12       ==> execBrightnessUp 1
+--     , modif xK_Left      ==> execBrightnessDown 10         -- Decrease brightness
+--     , modif xK_F11       ==> execBrightnessDown 10
+--     , shift xK_Left      ==> execBrightnessDown 1          -- Decrease brightness by a little bit
+--     , shift xK_F11       ==> execBrightnessDown 1
+--     ]
+--     where modm = modMask conf
+--           modif = (,) modm
+--           shift = (,) (modm .|. shiftMask)
+--           just  = (,) 0
+--           (==>) = (,)
+--           withDef = M.unionWith (flip const) (keys def conf)
+--
+-- isFloating :: Query Bool
+-- isFloating = Query . ReaderT $ \ w ->
+--     withWindowSet $ \ s -> return $ M.member w (W.floating s)
+--
+--
+-- execRestartXmonad = spawn "stack exec -- xmonad --restart"
+-- execExitXmonad = io exitSuccess
+-- execLayoutReset conf = X.setLayout (layoutHook conf)
+-- execToggleFloat = windows $ \ s -> case W.peek s of
+--     Nothing -> s
+--     Just w -> if M.member w (W.floating s) then W.sink w s else W.float w (W.RationalRect 0 0 1 1) s
+-- execVolumeUp val = spawn $ "amixer sset Master " ++ show val ++ "%+"
+-- execVolumeDown val = spawn $ "amixer sset Master " ++ show val ++ "%-"
+-- execVolumeToggle = spawn "amixer sset Master toggle && amixer sset Speaker unmute && amixer sset Headphone unmute"
+-- execBrightnessUp val = spawn $ "xbacklight -inc " ++ show val
+-- execBrightnessDown val = spawn $ "xbacklight -dec " ++ show val
+--
+
+-- fixPlasma :: ConfigModifier' l (ModifiedLayout AvoidStruts l)
+-- fixPlasma conf = docks $
+--     conf { layoutHook = avoidStruts $ layoutHook conf
+--          , manageHook = manageHook conf <+> manageDocks
+-- --            <+> (className =? "Plasma"      --> doIgnore)
+--             <+> (className =? "plasmashell" --> doFloat)
+--          }
+--
+-- -- * Stuff related to the dock.
+--
+-- data PopDockConfig
+--    = PopDockConfig
+--    { dock_keys      :: (ButtonMask, KeySym)
+--    , dock_setup     :: XConfig Layout -> X ()
+--    , dock_breakdown :: XConfig Layout -> X ()
+--    , dock_fields    :: [IO String]
+--    }
+--
+-- popDock key = PopDockConfig
+--     { dock_keys = key
+--     , dock_setup = const (return ())
+--     , dock_breakdown = const (return ())
+--     , dock_fields = [] }
+--
+-- activatePopDock popConf conf =
+--     conf { keys = \ conf' -> M.insert key (action conf') (keys conf conf')}
+--     where key = dock_keys popConf
+--           action conf = dock_setup popConf conf >> dock_breakdown popConf conf
+--
+-- -- | Modify popdock to include a task bar.
+-- activatePopDockTaskBar popConf =
+--     popConf { dock_setup = (setup >>) . dock_setup popConf
+--             , dock_breakdown = (>> breakdown) . dock_breakdown popConf }
+--     where setup = runTaskBar popConf
+--           breakdown = spawn "killall dzen2"
+--
+-- activatePopDockTrayBar popConf =
+--     popConf { dock_setup = (setup >>) . dock_setup popConf
+--             , dock_breakdown = (>> breakdown) . dock_breakdown popConf }
+--     where setup = runTrayBar popConf >> rescreen
+--           breakdown = spawn "killall trayer"
+--
+-- bash :: MonadIO m => String -> m String
+-- bash str = runProcessWithInput "bash" ["-c", str] ""
+--
+-- addField action popConf = popConf { dock_fields = action : dock_fields popConf }
+--
+-- fieldDate    =
+--     runProcessWithInput "date" ["+%a %-d %b, %H:%M"] ""
+--
+-- fieldVolume  =
+--     runProcessWithInput "amixer" ["sget","Master"] ""
+--     >>= runProcessWithInput "grep" ["-oP","\\d{1,3}%"]
+--
+-- fieldBattery =
+--     do state   <- strip <$> bash "upower -i `upower -e | grep -m1 BAT` | grep state | grep -oP \"\\w*$\""
+--        percent <- strip <$> bash "upower -i `upower -e | grep -m1 BAT` | grep percentage | grep -oP \"\\d*%\""
+--        timeto  <- strip <$> bash "upower -i `upower -e | grep -m1 BAT` | grep \"time to\" | grep -oP \"[0-9,]* \\w*$\""
+--        return $ case (state, percent) of
+--            (_, "100%")       -> "Full"
+--            ("discharging",_) -> timeto ++ " left (" ++ percent ++ ")"
+--            ("charging",_)    -> "Full in " ++ timeto ++ " (" ++ percent ++ ")"
+--            otherwise         -> state ++ " (" ++ percent ++ ")"
+--
+-- -- | Open a docking tray
+-- runTrayBar popConf =
+--     do return ()
+--
+--
+-- -- | Open a dzen task bar
+-- runTaskBar popConf =
+--     do handlebar <- spawnPipe "dzen2 -p -ta r -bg \"#000000\" -fg \"#ffffff\""
+--        fields <- mapM io (dock_fields popConf)
+--        io $ hPutStrLn handlebar $ comb fields
+--     where comb = concatMap (pad 25 . strip)
+--           pad size = reverse . take size . (++ repeat ' ') . reverse . take size
+--
+-- strip = reverse . lstrip . reverse . lstrip
+-- lstrip = dropWhile isSpace
+--
+-- -- | Modify popdock to include a shell prompt.
+-- activatePopDockShellPrompt popConf =
+--     popConf { dock_setup = (>> setup) . dock_setup popConf }
+--     where setup = runShellPrompt popConf
+--
+-- -- | Open a shell prompt
+-- runShellPrompt popConf =
+--     shellPrompt shellConf
+--     where shellConf = def { font = "xft:Liberation Mono"
+--                           , promptBorderWidth = 0
+--                           , height = 50
+--                           , maxComplRows = Just 3
+--                           , historyFilter = filter (not . null) . historyFilter def
+--                           , promptKeymap = M.insert (dock_keys popConf) quit (promptKeymap def)
+--                           , bgColor = "#000000"
+--                           }
+--
+-- -- | Add an additional keybinding, mapping the super key (and caps key if it is bound to super), when pressed alone, to super+P.
+-- --   NOTE: Requires xcape.
+-- activateEasyPrompt conf =
+--     conf { startupHook = startupHook conf >> spawn cmd }
+--     where cmd = "xcape -e \"Super_L=Super_L|P\""
+--
+-- -- * XMonad modules
+--
+-- (&) = flip ($)
+--
+-- -- | Set mod mask to win button
+-- setModMask conf =
+--     conf { modMask = mod4Mask }
+--
+-- -- | Let caps lock behave as an additional super key (win key).
+-- --   NOTE: Requires xkb.
+-- activateCapsAsSuper conf =
+--     conf { startupHook = startupHook conf >> spawn caps2super }
+--     where caps2super = "setxkbmap -option \"caps:super\""
+--
+-- -- | Set terminal to use
+-- setTerminal conf =
+--   conf { terminal = myTerminal }
+--
+-- -- | Set basic layout options
+-- setLayout conf =
+--   conf { layoutHook = myLayout
+--        , borderWidth        = 2
+--        , normalBorderColor  = "#888888"
+--        , focusedBorderColor = "#222222" }
+--   where myLayout = f wide ||| f tall
+--         tall =          Tall 1 (5/100) (1/2)
+--         wide = Mirror $ Tall 1 (5/100) (3/4)
+--         f = spacingWithEdge 8
+--         th = def { inactiveColor = "#555555" }
+--
+-- -- | Set background image
+-- setBackground conf =
+--   conf { startupHook = spawn "feh --bg-fill --randomize Pictures" >> startupHook conf}
+--
+-- -- | Set startup programs.
+-- setStartup conf =
+--   conf { startupHook = startupHook conf >> myStartupHook }
+--   where myStartupHook = mapM_ spawn myStartups
+--
+-- -- | Activate full-screen features, e.g. for video players
+-- -- Also fixes the behavior of the taskbar in e.g. openSUSE.
+
+-- fixFullscreen :: ConfigModifier
+-- fixFullscreen conf =
+--   ewmh $ conf { handleEventHook = handleEventHook conf `mappend` fullscreenEventHook }
+--
+-- -- | Activate transparency in the layout
+-- fixTransparency conf =
+--   conf { startupHook = startupHook conf >> spawn "xcompmgr" }
+--
+-- -- -- | Assign an action to the modMask if no other key was pressed.
+-- -- --   This moves all the key bindings that use modMask to a submap.
+-- -- bindModMask :: KeySym -> X () -> XConfig l -> XConfig l
+-- -- bindModMask key action conf =
+-- --   conf { keys = modify (keys conf) }
+-- --   where mask = modMask finalConfig
+-- --         usesModMask (mods,key) act = (mask .|. mods) == mods
+-- --         modify bindsF layout =
+-- --             let binds = bindsF layout
+-- --                 (keysWithMod, keysWithoutMod) = M.partitionWithKey usesModMask binds
+-- --                 modRemoved = M.mapKeys (first (xor mask)) keysWithMod
+-- --                 subm = submapDefault action keysWithMod
+-- --             in M.insert (noModMask, key) subm keysWithoutMod
+--
+-- -- | Allow rotation of the screen using super+alt+arrows
+-- fixRotation conf =
+--     conf `additionalKeys`
+--         [ (( mask, key ), spawn (rotate key)) | key <- [ xK_Up, xK_Right, xK_Down, xK_Left ] ]
+--     where mask = modMask finalConfig .|. mod1Mask
+--           rotate key = xrandr key ++ " && " ++ xinput key
+--           -- Command that rotates the screen
+--           xrandr key = "xrandr --output `xrandr -q | grep -oP \".*(?= connected)\"` --rotate " ++ xrandrRot key
+--           xrandrRot key   | key == xK_Up    = "normal"
+--                           | key == xK_Right = "right"
+--                           | key == xK_Down  = "inverted"
+--                           | key == xK_Left  = "left"
+--           -- Command that rotates the touch screen input
+--           xinput key = "xinput set-prop 'ELAN Touchscreen' 'Coordinate Transformation Matrix' " ++ xinputTrans key
+--           xinputTrans key | key == xK_Up    = "1 0 0 0 1 0 0 0 1"
+--                           | key == xK_Right = "0 -1 1 1 0 0 0 0 1"
+--                           | key == xK_Down  = "-1 0 1 0 -1 1 0 0 1"
+--                           | key == xK_Left  = "0 1 0 -1 0 1 0 0 1"
+--
+-- -- | Activate touch gestures.
+-- --   NOTE:  touchegg to be installed, and uses the touchegg config (.config/touchegg/touchegg.conf)
+-- --   Minimal setup: <gesture type="DRAG" fingers="1" direction="ALL"> <action type="SCROLL">SPEED=7:INVERTED=true</action> </gesture>
+-- fixTouchGestures conf =
+--     conf { startupHook = startupHook conf >> spawn "touchegg" }
+--
+-- -- | Allow programs to show notifications on the side of the screen.
+-- activateNotifications conf =
+--     conf { startupHook = startupHook conf >> spawn nodifyd }
+--     where nodifyd = "/usr/lib/x86_64-linux-gnu/xfce4/notifyd/xfce4-notifyd"
+--
+-- -- | Show notification when sound is changed.
+-- -- NOTE: Requires xfce4-volumep
+-- fixSoundNotifications conf =
+--     conf { startupHook = startupHook conf >> spawn "xfce4-volumep" }
+--
+-- -- | Customize hotkeys
+-- setKeys conf =
+--     conf { keys = myKeys }
+--
+-- -- | Let all apps with class or app name in the "floaters" value, float.
+-- setFloaters conf =
+--     conf { manageHook = manageHook conf <+> floatHook }
+--     where lower = fmap (map toLower)
+--           floatHook = composeAll
+--               [ (||) <$> (lower className =? name)
+--                      <*> (lower appName   =? name)
+--                 --> doFloat
+--               | name <- lower myFloaters ]
+--
+-- setIgnored conf =
+--     conf { manageHook = manageHook conf <+> ignoreHook }
+--     where lower = fmap (map toLower)
+--           ignoreHook = composeAll
+--               [ (||) <$> (lower className =? name)
+--                      <*> (lower appName   =? name)
+--                 --> doIgnore
+--               | name <- lower myIgnore ]
+--
+-- -- | Invert scroll direction of the touch pad
+-- --   Note: Does not work in all applications, notably Atom and Spotify.
+-- naturalScrolling conf =
+--   conf { startupHook = startupHook conf >> spawn cmd}
+--   where cmd = "xinput set-button-map \"SynPS/2 Synaptics TouchPad\" 1 2 3 5 4 7 6 8 9 10 11 12"
+--
+--
+-- -- ? https://bbs.archlinux.org/viewtopic.php?id=116414
